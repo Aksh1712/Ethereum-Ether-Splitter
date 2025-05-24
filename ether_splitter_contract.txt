@@ -1,0 +1,152 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+/**
+ * @title EtherSplitter
+ * @dev A contract that automatically splits incoming Ether between three fixed addresses
+ * @author Your Name
+ */
+contract EtherSplitter {
+    // State variables
+    address public immutable recipient1;
+    address public immutable recipient2;
+    address public immutable recipient3;
+    
+    uint256 public constant SPLIT_PERCENTAGE = 33; // 33.33% each (with remainder handling)
+    uint256 public totalReceived;
+    uint256 public totalSplit;
+    
+    // Events
+    event EtherReceived(address indexed sender, uint256 amount);
+    event EtherSplit(
+        address indexed recipient1,
+        address indexed recipient2, 
+        address indexed recipient3,
+        uint256 amount1,
+        uint256 amount2,
+        uint256 amount3
+    );
+    event EmergencyWithdraw(address indexed owner, uint256 amount);
+    
+    // Errors
+    error ZeroAddress();
+    error TransferFailed();
+    error NoFundsToSplit();
+    error Unauthorized();
+    
+    // Contract owner for emergency functions
+    address public immutable owner;
+    
+    /**
+     * @dev Constructor sets the three recipient addresses
+     * @param _recipient1 First recipient address
+     * @param _recipient2 Second recipient address  
+     * @param _recipient3 Third recipient address
+     */
+    constructor(
+        address _recipient1,
+        address _recipient2,
+        address _recipient3
+    ) {
+        if (_recipient1 == address(0) || _recipient2 == address(0) || _recipient3 == address(0)) {
+            revert ZeroAddress();
+        }
+        
+        recipient1 = _recipient1;
+        recipient2 = _recipient2;
+        recipient3 = _recipient3;
+        owner = msg.sender;
+    }
+    
+    /**
+     * @dev Receive function that automatically splits incoming Ether
+     */
+    receive() external payable {
+        if (msg.value > 0) {
+            totalReceived += msg.value;
+            emit EtherReceived(msg.sender, msg.value);
+            _splitEther();
+        }
+    }
+    
+    /**
+     * @dev Fallback function that also splits incoming Ether
+     */
+    fallback() external payable {
+        if (msg.value > 0) {
+            totalReceived += msg.value;
+            emit EtherReceived(msg.sender, msg.value);
+            _splitEther();
+        }
+    }
+    
+    /**
+     * @dev Internal function to split Ether between the three recipients
+     */
+    function _splitEther() internal {
+        uint256 balance = address(this).balance;
+        if (balance == 0) {
+            revert NoFundsToSplit();
+        }
+        
+        // Calculate splits (33.33% each, remainder goes to recipient1)
+        uint256 shareAmount = balance / 3;
+        uint256 remainder = balance % 3;
+        
+        uint256 amount1 = shareAmount + remainder; // First recipient gets remainder
+        uint256 amount2 = shareAmount;
+        uint256 amount3 = shareAmount;
+        
+        totalSplit += balance;
+        
+        // Transfer to recipients
+        (bool success1, ) = recipient1.call{value: amount1}("");
+        if (!success1) revert TransferFailed();
+        
+        (bool success2, ) = recipient2.call{value: amount2}("");
+        if (!success2) revert TransferFailed();
+        
+        (bool success3, ) = recipient3.call{value: amount3}("");
+        if (!success3) revert TransferFailed();
+        
+        emit EtherSplit(recipient1, recipient2, recipient3, amount1, amount2, amount3);
+    }
+    
+    /**
+     * @dev Manual split function in case automatic splitting fails
+     */
+    function manualSplit() external {
+        _splitEther();
+    }
+    
+    /**
+     * @dev Emergency withdraw function (only owner)
+     * @param _to Address to withdraw to
+     */
+    function emergencyWithdraw(address _to) external {
+        if (msg.sender != owner) revert Unauthorized();
+        if (_to == address(0)) revert ZeroAddress();
+        
+        uint256 balance = address(this).balance;
+        if (balance == 0) revert NoFundsToSplit();
+        
+        (bool success, ) = _to.call{value: balance}("");
+        if (!success) revert TransferFailed();
+        
+        emit EmergencyWithdraw(_to, balance);
+    }
+    
+    /**
+     * @dev Get contract balance
+     */
+    function getBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+    
+    /**
+     * @dev Get recipient addresses
+     */
+    function getRecipients() external view returns (address, address, address) {
+        return (recipient1, recipient2, recipient3);
+    }
+}
