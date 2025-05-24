@@ -1,5 +1,0 @@
-MNEMONIC="your 12-word wallet mnemonic"
-INFURA_PROJECT_ID="your_infura_project_id"
-RECIPIENT1_ADDRESS="your_recipient1_address"
-RECIPIENT2_ADDRESS="your_recipient2_address"
-RECIPIENT3_ADDRESS="your_recipient3_address"
